@@ -1,15 +1,13 @@
 {-# LANGUAGE RankNTypes#-}
 module Main where
-import qualified Graphics.UI.GLFW as GLFW
-import Prelude hiding ((.))
-import Control.Wire 
+import Control.Wire hiding (id)
+import FRP.Netwire hiding (id)
 import Foreign.C (CDouble(..))
 
 import Graphics.Rendering.OpenGL as GL
-import Graphics.UI.GLFW (ErrorCallback, Key(..), KeyCallback, Window)
-import FRP.Netwire
-import Graphics.UI.GLFW (KeyState(..))
-import Graphics.UI.GLFW (getKey)
+import Graphics.UI.GLFW (ErrorCallback, Key(..), KeyCallback, Window, KeyState(..), getKey)
+import qualified Graphics.UI.GLFW as GLFW
+import Prelude hiding ((.))
 
 main :: IO ()
 main = do
@@ -55,11 +53,11 @@ render w session wire = do
                       Triangles 
                         $ do
                           GL.currentColor $= (GL.Color4 0 1 0 0)
-                          GL.vertex (GL.Vertex3 (-0.6 :: CDouble) (-0.4) 0)
+                          GL.vertex (GL.Vertex3 (0.4 :: CDouble) (0.0) 0)
                           GL.currentColor $= (GL.Color4 0 0 1 0)
-                          GL.vertex (GL.Vertex3 (0.6 :: CDouble) (-0.4) 0)
+                          GL.vertex (GL.Vertex3 (0.2 :: CDouble) (0.2) 0)
                           GL.currentColor $= (GL.Color4 1 0 0 0)
-                          GL.vertex (GL.Vertex3 (0.0 :: CDouble) (0.6) 0)
+                          GL.vertex (GL.Vertex3 (0.0 :: CDouble) (0.0) 0)
 
                    GLFW.swapBuffers w
                    GLFW.pollEvents
@@ -81,12 +79,22 @@ type Speed = Double
 
 acceleration :: (forall a . Key -> Wire s () IO a ()) -> Wire s () IO c Speed
 acceleration isDown = pure (0.0) . isDown (Key'A) . isDown (Key'S)
-      <|> pure (-10) . isDown (Key'A) 
-      <|> pure (10) . isDown (Key'S)
+      <|> pure (-50) . isDown (Key'A) 
+      <|> pure (50) . isDown (Key'S)
       <|> pure (0.0)
 
 speed :: HasTime t s => (forall b . Key -> Wire s () IO b ()) -> Wire s () IO a Speed
-speed isDown = integral (0.0) . (acceleration isDown)
+speed isDown = integralWith stopFunction (0.0) 
+               . zipApplicative  
+                     (acceleration isDown) 
+                     (isInhibiting $ isDown Key'D)
+
+zipApplicative :: Applicative a => a r -> a t -> a (r, t) 
+zipApplicative x y = (,) <$> x <*> y 
+
+stopFunction :: Num a => Bool -> a -> a
+stopFunction False = id
+stopFunction True = const 0  
 
 rotat :: HasTime t s => (forall b . Key -> Wire s () IO b ()) -> Wire s () IO a Speed
 rotat isDown = integral (0.0) . (speed isDown)
@@ -101,3 +109,7 @@ isKeyDown w k = mkGen_ $ \_ -> do
                           KeyState'Pressed -> Right mempty
                           KeyState'Released -> Left mempty
                           KeyState'Repeating -> Right mempty
+
+isInhibiting :: (Monoid e, Monad m) => Wire s e m a b -> Wire s e m a Bool
+isInhibiting w = pure True . w
+                 <|> pure False
