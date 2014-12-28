@@ -7,8 +7,7 @@ GameInfo
 import Prelude hiding ((.))
 import Control.Wire hiding (id)
 import FRP.Netwire hiding (id)
-import Graphics.UI.GLFW (getKey, KeyState(..))
-import Graphics.UI.GLFW (Window)
+import Graphics.UI.GLFW (KeyState(..))
 import Graphics.UI.GLFW (Key(..))
 
 
@@ -19,13 +18,17 @@ type Speed = Double
 
 type GameInfo = (Double, (Speed, Speed))
 
-rotationAcceleration :: (forall a . Key -> Wire s () IO a ()) -> Wire s () IO c Speed
+
+createNetwork  :: (Monad m, HasTime t s) => (Key -> m KeyState) -> Wire s () m a (Double, (Speed, Speed))
+createNetwork isDown = (rotat $ isKeyDown isDown) &&& (location $ isKeyDown isDown)
+
+rotationAcceleration :: Monad m => (forall a . Key -> Wire s () m a ()) -> Wire s () m c Speed
 rotationAcceleration isDown = pure (0.0) . isDown (Key'A) . isDown (Key'S)
       <|> pure (-50) . isDown (Key'P) 
       <|> pure (50) . isDown (Key'O)
       <|> pure (0.0)
 
-rotationSpeed :: HasTime t s => (forall b . Key -> Wire s () IO b ()) -> Wire s () IO a Speed
+rotationSpeed :: (Monad m, HasTime t s) => (forall b . Key -> Wire s () m b ()) -> Wire s () m a Speed
 rotationSpeed isDown = integralWith stopFunction (0.0) 
                . zipApplicative  
                      (rotationAcceleration isDown) 
@@ -38,7 +41,7 @@ stopFunction :: Num a => Bool -> a -> a
 stopFunction False = id
 stopFunction True = const 0  
 
-rotat :: HasTime t s => (forall b . Key -> Wire s () IO b ()) -> Wire s () IO a Speed
+rotat :: (Monad m, HasTime t s) => (forall b . Key -> Wire s () m b ()) -> Wire s () m a Speed
 rotat isDown = integral (0.0) . (rotationSpeed isDown)
 
 speed :: (Monad m, Monoid e) =>  (forall b . Key -> Wire s e m b ()) -> Wire s e m a (Speed, Speed)
@@ -61,8 +64,6 @@ location :: (HasTime t s, Monad m, Monoid e) =>  (forall b . Key -> Wire s e m b
 location isDown = 
     integralPair (0.0, 0.0) . speed isDown
 
-createNetwork  :: HasTime t s => Window -> Wire s () IO a (Double, (Speed, Speed))
-createNetwork w = (rotat $ isKeyDown w) &&& (location $ isKeyDown w)
 
 isInhibiting :: (Monoid e, Monad m) => Wire s e m a b -> Wire s e m a Bool
 isInhibiting w = pure True . w
@@ -72,9 +73,9 @@ integralPair :: (Fractional a, Fractional  b, HasTime t s, Monad m) => (a, b) ->
 integralPair (x, y) = (integral x) *** (integral y)
 
 
-isKeyDown :: Window -> Key -> Wire s () IO a () 
-isKeyDown w k = mkGen_ $ \_ -> do
-                s <- getKey w k
+isKeyDown :: Monad m => (Key -> m KeyState) -> Key  -> Wire s () m a () 
+isKeyDown keygen k = mkGen_ $ \_ -> do
+                s <- keygen k
                 return $ case s of
                           KeyState'Pressed -> Right mempty
                           KeyState'Released -> Left mempty

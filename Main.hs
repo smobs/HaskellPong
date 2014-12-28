@@ -8,6 +8,7 @@ import Graphics.Rendering.OpenGL as GL
 import Graphics.UI.GLFW (ErrorCallback, KeyCallback, Window)
 import qualified Graphics.UI.GLFW as GLFW
 import Prelude hiding ((.))
+import Graphics.UI.GLFW (getKey)
 
 main :: IO ()
 main = do
@@ -24,8 +25,9 @@ windowWork :: Window -> IO ()
 windowWork w = do
   GLFW.setWindowCloseCallback w (Just GLFW.destroyWindow)
   GLFW.setFramebufferSizeCallback w $ Just sizeViewPort
-  render w clockSession_ $ createNetwork w
+  render w clockSession_ $ createNetwork (getKey w)
   GLFW.destroyWindow w
+
 
 
 render :: Window -> Session IO s -> Wire s e IO a GameInfo -> IO ()
